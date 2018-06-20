@@ -1,0 +1,8 @@
+<script type="dojo/connect">
+              var menu = dijit.byId("tree_menu");
+              menu.bindDomNode(this.domNode);
+              dojo.connect(menu, "_openMyself", this, function(e){
+                var titem = dijit.getEnclosingWidget(e.target).item;
+                $('#delOrgId').val(treeStore.getValue(titem, "nodeId"));
+              });
+</script>
