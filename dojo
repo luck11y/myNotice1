@@ -1,8 +1,43 @@
-<script type="dojo/connect">
+<div id="treeContainer" class="tundra" style="width: 100%; overflow-x: auto; overflow-y: auto;">
+        <div dojoType="dijit.Tree" store="treeStore" labelAttr="name" id="deptTree">
+		
+   		 <script type="dojo/method" event="getLabelClass" args="item,opened">
+            var nId = item && treeStore.getValue(item, "nodeId");
+            if (nId == selectId){
+              return "dijitTreeLabelFocused";
+            }
+            return null;
+          </script>
+	    <script type="dojo/method" event="onClick" args="item,node">
+            if ('workclass' == item.nodeType){
+              selectDeptCode = item.parentNodeId;
+              selectClassId = item.nodeId;
+            } else {
+              selectDeptCode = item.nodeId;
+              selectClassId = "";
+            }
+
+            var tmpSelectId = selectDeptCode;
+            if(selectClassId != "") {
+              tmpSelectId = selectClassId;
+            }
+
+            if(tmpSelectId != selectId) {
+              doFilterSubmit();
+            }
+            //doClearFilterSubmit();
+			
+          </script>
+           <script type="dojo/connect">
               var menu = dijit.byId("tree_menu");
               menu.bindDomNode(this.domNode);
               dojo.connect(menu, "_openMyself", this, function(e){
                 var titem = dijit.getEnclosingWidget(e.target).item;
                 $('#delOrgId').val(treeStore.getValue(titem, "nodeId"));
               });
-</script>
+            </script>
+		  </div>
+      </div>
+<ul dojoType="dijit.Menu" id="tree_menu" style="display: none;">
+  <li dojoType="dijit.MenuItem" iconClass="dijitEditorIcon dijitEditorIconDelete" onClick="toDeleteTreeNode();">删除</li>
+</ul>      
