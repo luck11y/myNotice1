@@ -1,0 +1,90 @@
+<html>
+<script type="text/javascript">
+dojo.require("dijit.Tree");
+dojo.require("dojo.data.ItemFileReadStore");
+dojo.require("dojo.parser");
+
+var treeData = <bean:write name='treeScript' scope='request' filter='false'/>;
+var treeStore = new dojo.data.ItemFileReadStore(treeData);
+
+var checked = '<%= request.getAttribute("checked") %>';
+var identityId = '<%= request.getAttribute("identityId") %>';
+
+function initCheckBox() {	
+	if(checked!=""){
+		var ll = checked.split(",");
+		var size = ll.length;
+		$("[name='funCheck']").each(function(){
+			for(i=0; i<size;i++){
+				if($(this).val()==ll[i]){
+					$(this).attr("checked","checked");
+					break;
+				}
+			}
+		  });
+	}
+}
+ function initBackTreeNode() {
+    var theTree = dijit.byId("treeObj");
+    expChildren(theTree,theTree.rootNode);
+  }
+  
+  function expChildren(tree, node) {
+    dojo.forEach(node.getChildren(), function(n) {
+        tree._expandNode(n);
+        try {
+        	expChildren(tree,n);
+        } catch(e) {
+        }
+    }, node);
+  }
+dojo.addOnLoad(initBackTreeNode); 
+
+dojo.addOnLoad(initCheckBox);
+</script>
+<div id="treeContainer" class="tundra" style="width: 100%; overflow-x: auto; overflow-y: auto;">
+        <div dojoType="dijit.Tree" store="treeStore" labelAttr="name" id="deptTree">
+		<script type="dojo/method" event="getLabel" args="item">
+      		return "<input type='checkbox' name='funCheck' value='"+item.nodeId+"' onmousedown='backTreeCheckClick(this);' >" + this.store.getLabel(item);
+   		 </script>
+   		 <script type="dojo/method" event="getLabelClass" args="item,opened">
+            var nId = item && treeStore.getValue(item, "nodeId");
+            if (nId == selectId){
+              return "dijitTreeLabelFocused";
+            }
+            return null;
+          </script>
+	    <script type="dojo/method" event="onClick" args="item,node">
+            if ('workclass' == item.nodeType){
+              selectDeptCode = item.parentNodeId;
+              selectClassId = item.nodeId;
+            } else {
+              selectDeptCode = item.nodeId;
+              selectClassId = "";
+            }
+
+            var tmpSelectId = selectDeptCode;
+            if(selectClassId != "") {
+              tmpSelectId = selectClassId;
+            }
+
+            if(tmpSelectId != selectId) {
+              doFilterSubmit();
+            }
+            //doClearFilterSubmit();
+			
+          </script>
+           <script type="dojo/connect">
+              var menu = dijit.byId("tree_menu");
+              menu.bindDomNode(this.domNode);
+              dojo.connect(menu, "_openMyself", this, function(e){
+                var titem = dijit.getEnclosingWidget(e.target).item;
+                $('#delOrgId').val(treeStore.getValue(titem, "nodeId"));
+              });
+            </script>
+		  </div>
+      </div>
+<ul dojoType="dijit.Menu" id="tree_menu" style="display: none;">
+  <li dojoType="dijit.MenuItem" iconClass="dijitEditorIcon dijitEditorIconDelete" onClick="toDeleteTreeNode();">删除</li>
+</ul>      
+</html>
