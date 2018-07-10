@@ -1,0 +1,9 @@
+private static final ThreadLocal<Session> threadLocal = new ThreadLocal<Session>();
+public static Session getSession() throws HibernateException {
+    Session session = (Session) threadLocal.get();
+    if (session == null || !session.isOpen()) {
+      session = sessionFactory.openSession();
+      threadLocal.set(session);
+    }
+
+    return session;
