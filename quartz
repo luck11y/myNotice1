@@ -1,0 +1,44 @@
+
+// 初始化Scheduler
+			Scheduler scheduler = new StdSchedulerFactory().getDefaultScheduler();
+      scheduler.addJobListener(new JobListener(){
+        public String getName() {
+          return "MES_TASK";
+        }
+        public void jobExecutionVetoed(JobExecutionContext context) {
+        }
+        public void jobToBeExecuted(JobExecutionContext context) {
+          Scheduler jobScheduler = context.getScheduler();
+          JobDetail jobDetail = context.getJobDetail();
+          JobDataMap jobDataMap = jobDetail.getJobDataMap();
+          logger.info("Job " + jobDetail.getFullName() + "is starting to execute.");
+        }
+        public void jobWasExecuted(JobExecutionContext context, JobExecutionException exception) {
+        }
+      });
+      SchedulerFactory.init(scheduler);
+      SchedulerFactory.getScheduler().start();
+        
+        // 初始化定时任务
+       Scheduler schd = SchedulerFactory.getScheduler();
+    try {
+      if (schd.getJobDetail("JB_" + taskName, "JB_" + taskGroup) != null) {
+        logger.info(taskGroup + "-" + taskName + "启动失败");
+        return result;
+      }
+      CronTrigger cTrigger = new CronTrigger("CT_" + taskName, "CT_" + taskGroup, !Regulation.isEmpty(cronExpr) ? cronExpr : null);
+      JobDetail jobdetail = new JobDetail();
+      jobdetail.setJobClass(jobClass);
+      JobDataMap dataMap = new JobDataMap();
+      if (!Regulation.isEmpty(parameter)) {
+        JSONObject jsonObj = JSONObject.fromObject(parameter);
+        Object bean = JSONObject.toBean(jsonObj);
+        Map map = JSONUtils.getProperties(jsonObj);
+        for (Object obj : map.keySet()) {
+          dataMap.put(obj.toString(), PropertyUtils.getProperty(bean, obj.toString()));
+        }
+      }
+      jobdetail.setJobDataMap(dataMap);
+      jobdetail.setName("JB_" + taskName);
+      jobdetail.setGroup("JB_" + taskGroup);
+      schd.scheduleJob(jobdetail, cTrigger);
