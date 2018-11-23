@@ -9,7 +9,9 @@ public class OrderListCountThread implements Callable<List<Map<String, Object>>>
   public List<Map<String, Object>> call() throws Exception {
     Session session = HibernateSessionFactory.getSession();
     BaseHibernateDAO dao = new BaseHibernateDAO(session);
-    return dao.findListBySql(countSql, params_count);
+    List<Map<String, Object>> rt = dao.findListBySql(countSql, params_count);
+    session.close();
+    return rt;
   }
 
 }
