@@ -1,0 +1,28 @@
+public class OrderListCountThread implements Callable<List<Map<String, Object>>> {
+  String countSql = "";
+  Object[] params_count = null;
+  public OrderListCountThread(String sql,Object[] params_count) {
+    this.countSql=sql;
+    this.params_count=params_count;
+  }
+  @Override
+  public List<Map<String, Object>> call() throws Exception {
+    Session session = HibernateSessionFactory.getSession();
+    BaseHibernateDAO dao = new BaseHibernateDAO(session);
+    return dao.findListBySql(countSql, params_count);
+  }
+
+}
+
+
+// 线程池
+    ExecutorService pool = Executors.newFixedThreadPool(2);
+    OrderListCountThread c1 = new OrderListCountThread(countSql, params_count);
+    OrderListCountThread c2 = new OrderListCountThread(listSql, params_list);
+    // 表示异步计算的结果
+    Future<List<Map<String, Object>>> f1 = pool.submit(c1);
+    Future<List<Map<String, Object>>> f2 = pool.submit(c2);
+    pool.shutdown();
+    List<Map<String, Object>> countList = f1.get();
+    List<Map<String, Object>> mList = f2.get();
+
