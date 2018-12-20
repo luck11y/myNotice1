@@ -1,0 +1,82 @@
+SELECT T.dept_name,	
+		SUM(DECODE(T.Course, '订单收入', T.accounted_money)) 订单收入,
+		SUM(DECODE(T.Course, '订单支出', T.accounted_money)) 订单支出,
+		SUM(DECODE(T.Course, '班组长绩效收入', T.accounted_money)) 班组长绩效收入,
+		SUM(DECODE(T.Course, '班组长绩效支出', T.accounted_money)) 班组长绩效支出,
+		SUM(DECODE(T.Course, '代班长津贴收入', T.accounted_money)) 代班长津贴收入,
+		SUM(DECODE(T.Course, '代班长津贴支出', T.accounted_money)) 代班长津贴支出,
+		SUM(DECODE(T.Course, '班组长内部管理收入', T.accounted_money)) 班组长内部管理收入,
+		SUM(DECODE(T.Course, '班组长内部管理支出', T.accounted_money)) 班组长内部管理支出,
+		SUM(DECODE(T.Course, '报告工资收入', T.accounted_money)) 报告工资收入,
+		SUM(DECODE(T.Course, '报告工资支出', T.accounted_money)) 报告工资支出,
+		SUM(DECODE(T.Course, '辅工工资支出', T.accounted_money)) 辅工工资支出
+
+  FROM 
+(
+select  sum(a.accounted_money) accounted_money ,b.dept_name,
+case 
+    when a.accounted_money>=0 and a.accounted_type=1 
+  then '订单收入'  
+  when a.accounted_money<=0 and (a.accounted_type=5 or a.accounted_type=9 ) 
+  then '订单支出'
+  when (a.accounted_money<=0 and a.accounted_type=3) or (a.accounted_type=10 and a.accounted_money>=0) 
+  then  '班组长绩效收入'
+  when (a.accounted_money>=0 and a.accounted_type=3) 
+  then  '班组长绩效支出' 
+  when (a.accounted_money>=0 and a.accounted_type=7)or (a.accounted_type=4 and a.accounted_money<=0) 
+  then  '代班长津贴收入' 
+  when   a.accounted_type=4 and a.accounted_money>=0
+  then  '代班长津贴支出'
+  when   (a.accounted_money>=0 and a.accounted_type=11)or (a.accounted_type=2 and a.accounted_money<=0)
+  then  '班组长内部管理收入'
+  when   (a.accounted_money>=0 and a.accounted_type=2) 
+  then  '班组长内部管理支出'
+  when   (a.accounted_money>=0 and a.accounted_type=12) 
+  then  '报告工资收入'
+  when   (a.accounted_money<=0 and a.accounted_type=12) 
+    then  '报告工资支出'      
+  when   (a.accounted_money>=0 and a.accounted_type=6) 
+    then  '辅工工资支出'    
+else '--'  end Course
+from 
+(SELECT u.dept_code,t.accounted_type,sum(t.accounted_money) accounted_money,
+case when accounted_money>=0 then 1 else 0 end in_flag FROM  sf_salaryaccount_item t join sf_salaryaccount t1
+on t.account_id=t1.account_id join base_workuser u on t1.user_id=u.user_id
+where t.status=1 and account_item_type=2 and t1.account_type=1
+and t.accounted_time>=to_date('2018-11-26 0:0:0','YYYY-MM-DD HH24:MI:SS')
+and t.accounted_time<=to_date('2018-12-12 23:59:59','YYYY-MM-DD HH24:MI:SS')
+GROUP BY  t.accounted_type,u.dept_code,
+case when accounted_money>=0 then 1 else 0 end
+) a 
+join sf_deptinfo b on a.dept_code=b.dept_code 
+where  not(a.accounted_money>=0 and (a.accounted_type=5 or a.accounted_type=9 ) )
+
+GROUP BY   b.dept_name ,
+case 
+    when a.accounted_money>=0 and a.accounted_type=1 
+  then '订单收入'  
+  when a.accounted_money<=0 and (a.accounted_type=5 or a.accounted_type=9 ) 
+  then '订单支出'
+  when (a.accounted_money<=0 and a.accounted_type=3) or (a.accounted_type=10 and a.accounted_money>=0) 
+  then  '班组长绩效收入'
+  when (a.accounted_money>=0 and a.accounted_type=3) 
+  then  '班组长绩效支出' 
+  when (a.accounted_money>=0 and a.accounted_type=7)or (a.accounted_type=4 and a.accounted_money<=0) 
+  then  '代班长津贴收入' 
+  when   a.accounted_type=4 and a.accounted_money>=0
+  then  '代班长津贴支出'
+  when   (a.accounted_money>=0 and a.accounted_type=11)or (a.accounted_type=2 and a.accounted_money<=0)
+  then  '班组长内部管理收入'
+  when   (a.accounted_money>=0 and a.accounted_type=2) 
+  then  '班组长内部管理支出'
+  when   (a.accounted_money>=0 and a.accounted_type=12) 
+  then  '报告工资收入'
+  when   (a.accounted_money<=0 and a.accounted_type=12) 
+    then  '报告工资支出'      
+  when   (a.accounted_money>=0 and a.accounted_type=6) 
+    then  '辅工工资支出'    
+else '--'  end
+)
+   T
+GROUP BY T.dept_name
+
