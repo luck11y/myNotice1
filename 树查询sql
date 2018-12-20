@@ -1,0 +1,5 @@
+--父
+select * from sf_deptinfo start with DEPT_CODE='0002' connect by  dept_code=prior parentdept_code
+
+--子
+select * from sf_deptinfo start with DEPT_CODE='0002' CONNECT BY PRIOR DEPT_CODE= PARENTDEPT_CODE
