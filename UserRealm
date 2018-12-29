@@ -1,0 +1,94 @@
+package com.sany.fir.admin.shiro.shiro;
+
+
+import com.sany.fir.admin.common.utils.R;
+import com.sany.fir.admin.shiro.dao.SysMenuDao;
+import com.sany.fir.admin.shiro.dao.SysUserDao;
+import com.sany.fir.sdk.shiro.SysMenuEntity;
+import com.sany.fir.admin.shiro.service.LoginService;
+import com.sany.fir.sdk.shiro.SysRoleEntity;
+import com.sany.fir.sdk.utils.Constants;
+import com.sany.fir.sdk.user.UserSession;
+import com.sany.fir.sdk.utils.PropertiesUtil;
+import org.apache.commons.lang.StringUtils;
+import org.apache.shiro.authc.AuthenticationException;
+import org.apache.shiro.authc.AuthenticationInfo;
+import org.apache.shiro.authc.AuthenticationToken;
+import org.apache.shiro.authc.SimpleAuthenticationInfo;
+import org.apache.shiro.authz.AuthorizationInfo;
+import org.apache.shiro.authz.SimpleAuthorizationInfo;
+import org.apache.shiro.realm.AuthorizingRealm;
+import org.apache.shiro.subject.PrincipalCollection;
+import org.springframework.beans.factory.annotation.Autowired;
+
+import java.util.*;
+
+/**
+ * Created by SF on 2017/7/5.
+ */
+public class UserRealm extends AuthorizingRealm {
+
+    private String subsystemKey= PropertiesUtil.getProperty("system.code");
+
+    @Autowired
+    private SysUserDao sysUserDao;
+    @Autowired
+    private SysMenuDao sysMenuDao;
+    @Autowired
+    private LoginService loginService;
+
+    @Override
+    protected AuthorizationInfo doGetAuthorizationInfo(PrincipalCollection principals) {
+        UserSession user = (UserSession) principals.getPrimaryPrincipal();
+        List<SysRoleEntity> roleList = user.getRoleList();
+
+        List<String> roleKeyList = new ArrayList<>();
+        List<String> roleIdList = new ArrayList<>();
+        roleList.forEach(role->{
+            roleKeyList.add(role.getRoleKey());
+            roleIdList.add(role.getRoleId()+"");
+        });
+
+        List<String> permsList = null;
+
+        //系统管理员，拥有最高权限
+        if (roleKeyList.contains (Constants.ROLE_SUPER_ADMIN)) {
+            List<SysMenuEntity> menuList = sysMenuDao.queryList(new HashMap<>());
+            permsList = new ArrayList<>(menuList.size());
+            for (SysMenuEntity menu : menuList) {
+                permsList.add(menu.getPerms());
+            }
+        } else {
+            permsList = sysUserDao.queryAllPerms(roleIdList);
+        }
+
+        //用户权限列表
+        Set<String> permsSet = new HashSet<String>();
+        for (String perms : permsList) {
+            if (StringUtils.isBlank(perms)) {
+                continue;
+            }
+            permsSet.addAll(Arrays.asList(perms.trim().split(",")));
+        }
+
+        SimpleAuthorizationInfo info = new SimpleAuthorizationInfo();
+        info.setStringPermissions(permsSet);
+        return info;
+    }
+
+    @Override
+    protected AuthenticationInfo doGetAuthenticationInfo(AuthenticationToken token) throws AuthenticationException {
+        String username = (String) token.getPrincipal();
+        String password = new String((char[]) token.getCredentials());
+        R r;
+
+        r = loginService.login(username, password, subsystemKey);
+
+        if ("0".equals(r.get("code").toString())) {
+            SimpleAuthenticationInfo info = new SimpleAuthenticationInfo(r.get("userSession"), password, getName());
+            return info;
+        } else {
+            throw new AuthenticationException(r.get("msg").toString());
+        }
+    }
+}
