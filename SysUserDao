@@ -1,0 +1,83 @@
+package com.sany.fir.admin.shiro.dao;
+
+import com.sany.fir.admin.common.dao.BaseDao;
+import com.sany.fir.sdk.shiro.SysRoleEntity;
+import com.sany.fir.sdk.shiro.UserEntity;
+import org.apache.ibatis.annotations.Param;
+
+import java.util.List;
+import java.util.Map;
+
+/**
+ * 系统用户
+ *
+ * @author chenshun
+ * @email sunlightcs@gmail.com
+ * @date 2016年9月18日 上午9:34:11
+ */
+public interface SysUserDao extends BaseDao<UserEntity> {
+
+    /**
+     * 查询用户的所有权限
+     *
+     * @param roleList
+     */
+    List<String> queryAllPerms(List<String> roleList);
+
+    /**
+     * 查询用户所有菜单ID
+     * @param roleList
+     * @return
+     */
+    List<Long> queryUserAllMenuId(List<SysRoleEntity> roleList);
+
+    /**
+     * 根据用户名，查询系统用户
+     */
+    UserEntity queryByUserName(String username);
+
+    Long lockUser(Long uid);
+
+    /**
+     * 查询用户角色key列表
+     *
+     * @param uid
+     * @return
+     */
+    List<String> queryRoleKeyList(@Param("uid") Long uid, @Param("subsystemKey") String subsystemKey);
+
+    /**
+     * 查询用户角色key列表
+     *
+     * @param uid
+     * @return
+     */
+    List<SysRoleEntity> queryRoleList(@Param("uid") Long uid, @Param("subsystemKey") String subsystemKey);
+
+    /**
+     * 根据uid查用户对象
+     *
+     * @param uid
+     * @return
+     */
+    UserEntity queryByUid(Long uid);
+
+    /**
+     * 修改密码
+     */
+    int updatePassword(Map<String, Object> map);
+
+
+
+    /**
+     * 查询用户的所有权限
+     *
+     * @param userId 用户ID
+     */
+    List<String> queryAllPermsByUser(@Param("userId") Long userId, @Param("subsystemKey") String subsystemKey);
+
+    /**
+     * 查询用户的所有菜单ID
+     */
+    List<Long> queryAllMenuId(Long userId);
+}
