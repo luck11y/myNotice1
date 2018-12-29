@@ -1,0 +1,82 @@
+package com.sany.fir.admin.shiro.service.impl;
+
+import com.sany.fir.admin.common.utils.R;
+import com.sany.fir.admin.shiro.dao.SysUserDao;
+import com.sany.fir.sdk.shiro.SysRoleEntity;
+import com.sany.fir.sdk.shiro.UserEntity;
+import com.sany.fir.admin.shiro.service.LoginService;
+import com.sany.fir.sdk.cache.util.StringUtil;
+import com.sany.fir.sdk.user.UserSession;
+import org.apache.shiro.crypto.hash.Sha256Hash;
+import org.springframework.beans.factory.annotation.Autowired;
+import org.springframework.stereotype.Service;
+import java.util.HashMap;
+import java.util.List;
+import java.util.Map;
+
+/**
+ * Created by  on 2017/07/04 0004.
+ */
+@Service
+public class LoginServiceImpl implements LoginService {
+
+    @Autowired
+    private SysUserDao sysUserDao;
+
+    @Override
+    public R login(String username, String password, String subsystemKey) {
+        R r = new R();
+        try {
+//            Assert.isBlank(username, "用户名不能为空");
+//            Assert.isBlank(password, "密码不能为空");
+//            Assert.isBlank(subsystemKey, "子系统key不能为空");
+
+            UserEntity userEntity = sysUserDao.queryByUserName(username);
+            if (userEntity == null) return R.error("账号或密码不正确");//账号不存在
+            if (!password.equals(userEntity.getPassword())) return R.error("账号或密码不正确");//密码错误
+            if (userEntity.getStatus() == 0) return R.error("账号已被锁定,请联系管理员");//账号禁用
+            List<SysRoleEntity> roleList = sysUserDao.queryRoleList(userEntity.getUserId(), subsystemKey);
+            if (roleList == null || roleList.isEmpty()) return R.error("无权访问该系统");
+            //写userSession
+            UserSession userSession = new UserSession();
+            userSession.setEmail(userEntity.getEmail());
+            userSession.setMobile(userEntity.getMobile());
+            userSession.setPassword(userEntity.getPassword());
+            userSession.setRoleList(roleList);
+            userSession.setStatus(userEntity.getStatus());
+            userSession.setUserId(userEntity.getUserId());
+            userSession.setUsername(userEntity.getUsername());
+            userSession.setRealName(userEntity.getRealName());
+
+            //生成sessionID
+            String token = StringUtil.generateToken();
+            userSession.setSessionId(token);
+
+            r.put("userSession", userSession);
+        } catch (Exception e) {
+            return R.error(e.getMessage());
+        }
+        return r;
+    }
+
+    /**
+     * 修改密码
+     *
+     * @param userId      用户ID
+     * @param password    原密码
+     * @param newPassword 新密码
+     */
+    @Override
+    public int updatePassword(Long userId, String password, String newPassword) {
+        //sha256加密
+        password = new Sha256Hash(password).toHex();
+        //sha256加密
+        newPassword = new Sha256Hash(newPassword).toHex();
+
+        Map<String, Object> map = new HashMap<>();
+        map.put("userId", userId);
+        map.put("password", password);
+        map.put("newPassword", newPassword);
+        return sysUserDao.updatePassword(map);
+    }
+}
