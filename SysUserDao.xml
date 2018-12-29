@@ -1,0 +1,185 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE mapper PUBLIC "-//mybatis.org//DTD Mapper 3.0//EN" "http://mybatis.org/dtd/mybatis-3-mapper.dtd">
+
+<mapper namespace="com.sany.fir.admin.shiro.dao.SysUserDao">
+
+    <select id="queryObject" resultType="com.sany.fir.sdk.shiro.UserEntity">
+        select * from sys_user where user_id = #{value}
+    </select>
+
+    <select id="queryList" resultType="com.sany.fir.sdk.shiro.UserEntity">
+        select * from sys_user
+        <where>
+            <if test="createUserId != null">
+                and `create_user_id` = #{createUserId}
+            </if>
+            <if test="username != null and username.trim() != ''">
+                and `username` like concat('%',#{username},'%')
+            </if>
+        </where>
+        <choose>
+            <when test="sidx != null and sidx.trim() != ''">
+                order by ${sidx} ${order}
+            </when>
+            <otherwise>
+                order by user_id desc
+            </otherwise>
+        </choose>
+        <if test="offset != null and limit != null">
+            limit #{offset}, #{limit}
+        </if>
+    </select>
+
+    <select id="queryTotal" resultType="int">
+        select count(*) from sys_user
+        <where>
+            <if test="createUserId != null">
+                and `create_user_id` = #{createUserId}
+            </if>
+            <if test="username != null and username.trim() != ''">
+                and `username` like concat('%',#{username},'%')
+            </if>
+        </where>
+    </select>
+
+    <!-- 查询用户的所有权限 -->
+    <select id="queryAllPerms" resultType="java.lang.String" parameterType="java.util.List">
+        SELECT
+          sm.perms
+        FROM
+          `sys_role_menu` rm
+          INNER JOIN `sys_menu` sm
+            ON sm.menu_id = rm.menu_id
+        WHERE rm.role_id IN
+        <foreach collection="list" item="item" open="(" close=")" separator=",">
+            #{item}
+        </foreach>
+	</select>
+
+    <!-- 查询用户的所有菜单ID -->
+    <select id="queryUserAllMenuId" resultType="java.lang.Long" parameterType="java.util.List">
+        SELECT
+        DISTINCT menu_id
+        FROM
+        `sys_role_menu`
+        WHERE role_id IN
+        <foreach collection="list" item="item" open="(" close=")" separator=",">
+            #{item.roleId}
+        </foreach>
+    </select>
+
+    <select id="queryByUserName" resultType="com.sany.fir.sdk.shiro.UserEntity">
+        select * from sys_user where username = #{username}
+    </select>
+
+    <select id="lockUser" resultType="java.lang.Long">
+        SELECT u.`user_id` FROM `sys_user` u WHERE u.`user_id`= #{value} FOR UPDATE
+    </select>
+
+    <select id="queryRoleKeyList" resultType="java.lang.String">
+        SELECT
+        r.`role_key`
+        FROM
+        `sys_role` r,
+        `sys_user_role` sur,
+        `sys_subsystem` s
+        WHERE r.`role_id` = sur.`role_id`
+        AND r.`subsystem_id`=s.`id`
+        AND s.`key` = #{subsystemKey}
+        AND sur.`user_id` = #{uid}
+    </select>
+
+    <select id="queryRoleList" resultType="com.sany.fir.sdk.shiro.SysRoleEntity">
+        SELECT
+        r.*
+        FROM
+        `sys_role` r,
+        `sys_user_role` sur,
+        `sys_subsystem` s
+        WHERE r.`role_id` = sur.`role_id`
+        AND r.`subsystem_id`=s.`id`
+        AND s.`key` = #{subsystemKey}
+        AND sur.`user_id` = #{uid}
+    </select>
+
+    <select id="queryByUid" resultType="com.sany.fir.sdk.shiro.UserEntity">
+        select * from sys_user where user_id = #{uid}
+    </select>
+
+    <update id="updatePassword" parameterType="map">
+        update sys_user set `password` = #{newPassword},update_user_id=#{userId},update_time=now()
+        where user_id = #{userId} and password = #{password}
+    </update>
+
+    <insert id="save" parameterType="com.sany.fir.sdk.shiro.UserEntity" useGeneratedKeys="true"
+            keyProperty="userId">
+        insert into sys_user
+        (
+        `user_id`,
+        `username`,
+        `real_name`,
+        `password`,
+        `email`,
+        `mobile`,
+        `status`,
+        `create_user_id`,
+        `create_time`
+        )
+        values
+        (
+        #{userId},
+        #{username},
+        #{realName},
+        #{password},
+        #{email},
+        #{mobile},
+        #{status},
+        #{createUserId},
+        #{createTime}
+        )
+    </insert>
+
+    <update id="update" parameterType="com.sany.fir.sdk.shiro.UserEntity">
+        update sys_user
+        <set>
+            <if test="username != null">`username` = #{username},</if>
+            <if test="realName != null">`real_name` = #{realName},</if>
+            <if test="password != null">`password` = #{password},</if>
+            <if test="email != null">`email` = #{email},</if>
+            <if test="mobile != null">`mobile` = #{mobile},</if>
+            <if test="status != null">`status` = #{status},</if>
+            <if test="updateUserId != null">`update_user_id` = #{updateUserId},</if>
+            <if test="updateTime != null">`update_time` = #{updateTime},</if>
+        </set>
+        where user_id = #{userId}
+        <if test="createUserId != null">
+            and `create_user_id` = #{createUserId}
+        </if>
+    </update>
+
+    <!-- 查询用户的所有权限 -->
+    <select id="queryAllPermsByUser" resultType="string">
+        SELECT
+        m.perms
+        FROM
+        sys_user_role ur
+        LEFT JOIN sys_role_menu rm
+        ON ur.role_id = rm.role_id
+        LEFT JOIN sys_menu m
+        ON rm.menu_id = m.menu_id
+        LEFT JOIN `sys_role` r
+        ON ur.`role_id` = r.`role_id`
+        LEFT JOIN `sys_subsystem` s
+        ON r.`subsystem_id` = s.`id`
+        WHERE ur.user_id = #{userId}
+        AND s.`key`=#{subsystemKey}
+    </select>
+
+    <!-- 查询用户的所有菜单ID -->
+    <select id="queryAllMenuId" resultType="long">
+        select distinct rm.menu_id from sys_user_role ur
+        LEFT JOIN sys_role_menu rm on ur.role_id = rm.role_id
+        where ur.user_id = #{userId}
+    </select>
+
+</mapper>
