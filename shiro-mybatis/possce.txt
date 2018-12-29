@@ -1,0 +1,2 @@
+LoginController.java->shiro UserRealm.doGetAuthenticationInfo->LoginService->
+LoginServiceImpl->SysUserDao->SysUserDao.xml
