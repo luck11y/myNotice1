@@ -1,0 +1,495 @@
+Spring Boot中除了对常用的关系型数据库提供了优秀的自动化支持之外，对于很多NoSQL数据库一样提供了自动化配置的支持，包括：Redis, MongoDB, 等。
+
+Redis简单介绍
+
+Redis是Redis是Remote DIctionary Server的缩写，是目前业界使用最广泛的内存数据存储。相比memcached，Redis支持更丰富的数据结构(Memcached完全基于内存，而Redis具有持久化保存特性，Redis可以将数据写入到磁盘中(以字节（0101这样的二进制数据）的形式写入的)，例如hashes, lists, sets等，同时支持数据持久化。除此之外，Redis还提供一些类数据库的特性，比如事务，HA，主从库。可以说Redis兼具了缓存系统和数据库的一些特性，因此有着丰富的应用场景。
+
+Spring boot集成Redis
+
+添加依赖
+
+Spring Boot提供的数据访问框架Spring Data Redis基于Jedis。可以通过引入spring-boot-starter-redis来配置依赖关系。
+
+    <!-- 添加Spring-boot-starter-redis依赖 -->
+        <dependency>
+         <groupId>org.springframework.boot</groupId>
+         <artifactId>spring-boot-starter-redis</artifactId>
+        </dependency>
+ 对Redis进行配置，修改配置文件 application.properties
+
+复制代码
+# REDIS (RedisProperties)
+# Redis数据库索引（默认为0）
+spring.redis.database=0
+# Redis服务器地址
+spring.redis.host=localhost
+# Redis服务器连接端口
+spring.redis.port=6379
+# Redis服务器连接密码（默认为空）
+spring.redis.password=qpc_redis
+# 连接池最大连接数（使用负值表示没有限制）
+spring.redis.pool.max-active=8
+# 连接池最大阻塞等待时间（使用负值表示没有限制）
+spring.redis.pool.max-wait=-1
+# 连接池中的最大空闲连接
+spring.redis.pool.max-idle=8
+# 连接池中的最小空闲连接
+spring.redis.pool.min-idle=0
+# 连接超时时间（毫秒）
+spring.redis.timeout=0
+复制代码
+其中spring.redis.database的配置通常使用0即可，Redis在配置的时候可以设置数据库数量，默认为16，可以理解为数据库的schema.
+
+使用Redis
+
+使用自动配置的StringRedisTemplate对象进行Redis读写操作。
+
+复制代码
+@RunWith(SpringJUnit4ClassRunner.class)
+@SpringApplicationConfiguration(Application.class)
+public class ApplicationTest {
+    
+    private static final Logger LOG = Logger.getLogger(RedisApplicationTest.class);
+
+    @Autowired
+    private StringRedisTemplate stringRedisTemplate;
+    
+    //@Autowired
+    //private RedisTemplate<Serializable, Object> redisTemplate;
+    
+    //@Autowired
+    //private RedisService redisService;
+    
+    @Test
+    public void testStringWithRedis(){
+        stringRedisTemplate.opsForValue().set("name", "guanguan");
+        String val = stringRedisTemplate.opsForValue().get("name");
+        Assert.assertEquals("guanguan", val);
+    }
+}
+复制代码
+当然，根据StringRedisTemplate对象命名我们可以知道该对象支持String类型，但是在实际的应用中，我们可能需要存入Object对象。那该怎么存储呢。聪明的你，肯定立刻想到了，直接把对象转成json格式字符串，不就可以存储了嘛。这里我使用jackson依赖转换成json数据。
+
+ 首先添加jackson依赖
+
+复制代码
+        <!-- java json解析依赖 -->
+        <dependency>
+            <groupId>com.fasterxml.jackson.core</groupId>
+            <artifactId>jackson-annotations</artifactId>
+            <version>2.9.3</version>
+        </dependency>
+        <dependency>
+            <groupId>com.fasterxml.jackson.core</groupId>
+            <artifactId>jackson-core</artifactId>
+            <version>2.9.3</version>
+        </dependency>
+        <dependency>
+            <groupId>com.fasterxml.jackson.core</groupId>
+            <artifactId>jackson-databind</artifactId>
+            <version>2.9.3</version>
+        </dependency>
+复制代码
+实现json转换工具类
+
+复制代码
+public class JsonUtil {
+    
+    private static ObjectMapper objectMapper = new ObjectMapper();
+
+    public static String convertObj2String(Object object) {
+        String s = null;
+        try {
+            s = objectMapper.writeValueAsString(object);
+        } catch (JsonProcessingException e) {
+            e.printStackTrace();
+        }
+        return s;
+    }
+
+    public static <T> T convertString2Obj(String s, Class<T> clazz) {
+        T t = null;
+        try {
+            t = objectMapper.readValue(s, clazz);
+        } catch (IOException e) {
+            e.printStackTrace();
+        }
+        return t;
+    }
+}
+复制代码
+我们知道，RedisTemplate 是 redis 模块的核心类，是对 redis 操作的较高抽象具有丰富的特性。他关注的是序列化和连接管理，线程安全，提供了如下操作接口：
+
+HashOperations
+HyperLogLogOperations
+ListOperations
+SetOperations
+ValueOperations
+ZSetOperations
+那我们就实现一个通用的RedisService类完成Redis的读写操作
+
+复制代码
+@Service
+public class RedisService {
+
+       @Autowired
+        private StringRedisTemplate redisTemplate;
+
+        /**
+         * 一周有多少秒
+         */
+        private static final long WEEK_SECONDS = 7 * 24 * 60 * 60;
+
+
+        /**
+         * 将 key，value 存放到redis数据库中，默认设置过期时间为一周
+         *
+         * @param key
+         * @param value
+         */
+        public void set(String key, Object value) {
+            redisTemplate.opsForValue().set(key, JsonUtil.convertObj2String(value), WEEK_SECONDS, TimeUnit.SECONDS);
+        }
+
+        /**
+         * 将 key，value 存放到redis数据库中，设置过期时间单位是秒
+         *
+         * @param key
+         * @param value
+         * @param expireTime
+         */
+        public void set(String key, Object value, long expireTime) {
+            redisTemplate.opsForValue().set(key, JsonUtil.convertObj2String(value), expireTime, TimeUnit.SECONDS);
+        }
+
+        /**
+         * 判断 key 是否在 redis 数据库中
+         *
+         * @param key
+         * @return
+         */
+        public boolean exists(final String key) {
+            return redisTemplate.hasKey(key);
+        }
+
+        /**
+         * 获取与 key 对应的对象
+         * @param key
+         * @param clazz 目标对象类型
+         * @param <T>
+         * @return
+         */
+        public <T> T get(String key, Class<T> clazz) {
+            String s = get(key);
+            if (s == null) {
+                return null;
+            }
+            return JsonUtil.convertString2Obj(s, clazz);
+        }
+
+        /**
+         * 获取 key 对应的字符串
+         * @param key
+         * @return
+         */
+        public String get(String key) {
+            return redisTemplate.opsForValue().get(key);
+        }
+
+        /**
+         * 删除 key 对应的 value
+         * @param key
+         */
+        public void delete(String key) {
+            redisTemplate.delete(key);
+        }
+}
+复制代码
+新建一个User对象
+
+复制代码
+public class User implements Serializable{
+
+    /**
+     * 
+     */
+    private static final long serialVersionUID = 3456232569272497427L;
+
+    private int id;
+    
+    private String name;
+    
+    private int age;
+    
+    public User() {
+    }
+
+    public User(int id, String name, int age) {
+        super();
+        this.id = id;
+        this.name = name;
+        this.age = age;
+    }
+
+    public int getId() {
+        return id;
+    }
+
+
+    public void setId(int id) {
+        this.id = id;
+    }
+
+    public String getName() {
+        return name;
+    }
+
+    public void setName(String name) {
+        this.name = name;
+    }
+
+    public int getAge() {
+        return age;
+    }
+
+    public void setAge(int age) {
+        this.age = age;
+    }
+
+    @Override
+    public String toString() {
+        return "User [id=" + id + ", name=" + name + ", age=" + age + "]";
+    }
+}
+复制代码
+新建测试类
+
+复制代码
+@RunWith(SpringJUnit4ClassRunner.class)
+@SpringApplicationConfiguration(Application.class)
+public class ApplicationTest {
+    
+    private static final Logger LOG = Logger.getLogger(ApplicationTest.class);
+
+
+    @Autowired
+    private RedisService redisService;
+
+    
+    @Test
+    public void testRedisService(){
+        User user3 = new User(2,"xiaoxiaoping",16);
+        redisService.set("user3", user3, 1000*60l);
+        User userV3 = redisService.get("user3",User.class);
+        LOG.info("userV3====="+userV3.toString());
+    }
+}
+复制代码
+测试结果
+
+
+
+
+
+ 通过使用StringRedisTemplate对象完全实现了对Object对象的存储.通过redis-cli.exe可以查看到我们存储的Object对象是json格式字符串，但是当某个对象很大时,这个json字符串会很冗长，那我们有没有其他方式实现呢。如果有使用过spring-data-redis的开发者一定熟悉RedisTemplate<K, V>接口，StringRedisTemplate就相当于RedisTemplate<String, String>的实现。没有使用过，可以先看下StringRedisTemplate类源码。
+
+复制代码
+public class StringRedisTemplate extends RedisTemplate<String, String> {
+
+    /**
+     * Constructs a new <code>StringRedisTemplate</code> instance. {@link #setConnectionFactory(RedisConnectionFactory)}
+     * and {@link #afterPropertiesSet()} still need to be called.
+     */
+    public StringRedisTemplate() {
+        RedisSerializer<String> stringSerializer = new StringRedisSerializer();
+        setKeySerializer(stringSerializer);
+        setValueSerializer(stringSerializer);
+        setHashKeySerializer(stringSerializer);
+        setHashValueSerializer(stringSerializer);
+    }
+
+    /**
+     * Constructs a new <code>StringRedisTemplate</code> instance ready to be used.
+     * 
+     * @param connectionFactory connection factory for creating new connections
+     */
+    public StringRedisTemplate(RedisConnectionFactory connectionFactory) {
+        this();
+        setConnectionFactory(connectionFactory);
+        afterPropertiesSet();
+    }
+
+    protected RedisConnection preProcessConnection(RedisConnection connection, boolean existingConnection) {
+        return new DefaultStringRedisConnection(connection);
+    }
+}
+复制代码
+ 从源码分析，我们可以看出StringRedisTemplate实现RedisTemplate<K, V>接口，那我们完全可以模仿写一个RedisTemplate<Serializable, Object>模板类。但是Spring boot不支直接使用，所以根据源码，我们需要实现一个RedisSerializer<T>将来对传入对象进行序列化和反序列化。这个实现类ObjectRedisSerializer可以参考StringRedisSerializer类。另外，根据源码，可以发现，Redis默认的序列化方式为JdkSerializationRedisSerializer ，利用JDK的序列化和反序列化，持久化就是以字节（0101这样的二进制数据）的形式写入的。
+
+Redis存储对象实现如下
+
+添加ObjectRedisSerializer实现类，需要实现RedisSerializer<T>接口。
+
+复制代码
+/**
+ * 实现Redis对象的序列化接口
+ * 参考：JdkSerializationRedisSerializer源码
+ * 
+ */
+public class ObjectRedisSerializer implements RedisSerializer<Object>{
+
+    private static final Logger LOG = Logger.getLogger(ObjectRedisSerializer.class);
+    
+    /**
+     * 定义序列化和发序列化转化类
+     */
+    private Converter<Object, byte[]> serializer = new SerializingConverter();
+    private Converter<byte[], Object> deserializer = new DeserializingConverter();
+    
+    /**
+     * 定义转换空字节数组
+     */
+    private static final byte[] EMPTY_ARRAY = new byte[0]; 
+    
+    @Override
+    public byte[] serialize(Object obj) throws SerializationException {
+        byte[] byteArray = null;
+        if (null == obj) {
+            LOG.warn("Redis待序列化的对象为空.");
+            byteArray = EMPTY_ARRAY;
+        } else {
+            try {
+                byteArray = serializer.convert(obj);
+            } catch (Exception e) {
+                LOG.error("Redis序列化对象失败,异常："+e.getMessage());
+                byteArray = EMPTY_ARRAY;
+            }
+        }
+        return byteArray;
+    }
+
+    @Override
+    public Object deserialize(byte[] datas) throws SerializationException {
+        Object obj = null;
+        if(isNullOrEmpty(datas)){
+            LOG.warn("Redis待反序列化的对象为空.");
+        }else{
+            try {
+                obj = deserializer.convert(datas);
+            } catch (Exception e) {
+                LOG.error("Redis反序列化对象失败,异常："+e.getMessage());
+            }
+        }
+        return obj;
+    }
+    
+    private boolean isNullOrEmpty(byte[] datas){
+      return (null == datas)|| (datas.length == 0);
+    }
+}
+复制代码
+创建RedisConfig配置类，将RedisTemplate的setValueSerializer设置成ObjectRedisSerializer转换类。
+
+复制代码
+@Configuration
+public class RedisConfig {
+
+//    /**
+//     * 连接 redis 需要 RedisConnection 和 RedisConnectionFactory，
+//     * RedisConnection 是通过 RedisConnectionFactory 进行创建
+//     * RedisConnection 提供较低级的数据操作 （byte arrays）
+//     */
+//    @Bean
+//    RedisConnectionFactory initJedisConnectionFactory(){
+//        //在这里设置redis连接对象配置
+//        return new JedisConnectionFactory();
+//    }
+    
+    /**
+     * 配置RedisTemplate实例
+     * @param factory
+     * @return
+     */
+    @Bean
+    public RedisTemplate<Serializable, Object> redisTemplate(RedisConnectionFactory connectionFactory) {
+        RedisTemplate<Serializable, Object> template = new RedisTemplate<Serializable, Object>();
+        template.setConnectionFactory(connectionFactory);
+        template.afterPropertiesSet();
+        template.setKeySerializer(new StringRedisSerializer());
+        template.setValueSerializer(new ObjectRedisSerializer());
+        return template;
+    }
+}
+复制代码
+需要注意几点：
+
+在添加RedisConfig配置时，因为连接redis需要RedisConnection和RedisConnectionFactory，RedisConnection是通过RedisConnectionFactory进行创建若注入JedisConnnectionFactory，如果我们Redis设置了密码，在重新注入RedisConnectionFactory(如上注释代码)，就会报错如下：
+
+复制代码
+org.springframework.test.context.junit4.statements.RunAfterTestClassCallbacks.evaluate(RunAfterTestClassCallbacks.java:70)
+    at org.junit.runners.ParentRunner.run(ParentRunner.java:363)
+    at org.springframework.test.context.junit4.SpringJUnit4ClassRunner.run(SpringJUnit4ClassRunner.java:193)
+    at org.eclipse.jdt.internal.junit4.runner.JUnit4TestReference.run(JUnit4TestReference.java:86)
+    at org.eclipse.jdt.internal.junit.runner.TestExecution.run(TestExecution.java:38)
+    at org.eclipse.jdt.internal.junit.runner.RemoteTestRunner.runTests(RemoteTestRunner.java:459)
+    at org.eclipse.jdt.internal.junit.runner.RemoteTestRunner.runTests(RemoteTestRunner.java:678)
+    at org.eclipse.jdt.internal.junit.runner.RemoteTestRunner.run(RemoteTestRunner.java:382)
+    at org.eclipse.jdt.internal.junit.runner.RemoteTestRunner.main(RemoteTestRunner.java:192)
+Caused by: redis.clients.jedis.exceptions.JedisDataException: NOAUTH Authentication required.
+    at redis.clients.jedis.Protocol.processError(Protocol.java:117)
+    at redis.clients.jedis.Protocol.process(Protocol.java:151)
+    at redis.clients.jedis.Protocol.read(Protocol.java:205)
+    at redis.clients.jedis.Connection.readProtocolWithCheckingBroken(Connection.java:297)
+    at redis.clients.jedis.Connection.getStatusCodeReply(Connection.java:196)
+    at redis.clients.jedis.BinaryJedis.set(BinaryJedis.java:126)
+    at org.springframework.data.redis.connection.jedis.JedisConnection.set(JedisConnection.java:1136)
+    ... 36 more
+复制代码
+根据StringRedisTemplate源码，在注入RedisTemplate<Serializable, Object>直接使用默认的连接对象即可。设置如下代码：
+
+template.setConnectionFactory(connectionFactory);
+template.afterPropertiesSet();
+或者我们注入RedisConnectionFactory设置连接属性应该也是可以的，有兴趣可以尝试下。
+
+创建测试类
+
+复制代码
+@RunWith(SpringJUnit4ClassRunner.class)
+@SpringApplicationConfiguration(Application.class)
+public class ApplicationTest {
+    
+    private static final Logger LOG = Logger.getLogger(ApplicationTest.class);
+    
+    @Autowired
+    private RedisTemplate<Serializable, Object> redisTemplate;
+    
+    @Test
+    public void testObjectWithRedis(){
+        User user1 = new User(1,"guanguan",18);
+        redisTemplate.opsForValue().set("user1", user1);
+        
+        User userV1 = (User)redisTemplate.opsForValue().get("user1");
+        LOG.info("userV1====="+userV1.toString());
+        
+        User user2 = new User(2,"xiaoyan",16);
+        redisTemplate.opsForValue().set("user2", user2);
+        
+        User userV2 = (User)redisTemplate.opsForValue().get("user2");
+        LOG.info("user2====="+userV2.toString());
+        
+        User user3 = new User(3,"xiaoxiaoping",18);
+        redisTemplate.opsForValue().set("user3", user3);
+        
+        User userV3 = (User)redisTemplate.opsForValue().get("user3");
+        LOG.info("userV3====="+userV3.toString());
+        
+    }
+}
+复制代码
+测试结果：
+
+ 
+
+
+
+可以看出，是以字节方式存储的。
